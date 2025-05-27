@@ -1,10 +1,10 @@
 // firebase/services.ts
-import { collection, addDoc, getDocs, query, orderBy, getDoc, doc, setDoc } from 'firebase/firestore';
-import { db } from './config';
-import { Invoice } from '@/types';
+import {collection, addDoc, getDocs, query, orderBy, getDoc, doc, setDoc} from 'firebase/firestore';
+import {db} from '@/firebase/config';
+import {Invoice} from '@/types';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Network from 'expo-network';
-import { addToQueue } from '@/app/services/offline-queue';
+import {addToQueue} from '@/app/services/offline-queue';
 
 interface LaundryItem {
     id: string;
@@ -23,7 +23,7 @@ export const fetchLaundryItems = async (): Promise<{ [key: string]: LaundryItem[
         if (!acc[item.category]) {
             acc[item.category] = [];
         }
-        acc[item.category].push({ ...item, id: doc.id });
+        acc[item.category].push({...item, id: doc.id});
         return acc;
     }, {} as { [key: string]: LaundryItem[] });
 };
@@ -57,7 +57,7 @@ export const saveInvoice = async (invoice: Invoice): Promise<string> => {
         invoice.id = invoiceId;
 
         await setDoc(doc(db, 'invoices', invoiceId), invoice);
-        await setDoc(counterDoc, { value: nextNumber });
+        await setDoc(counterDoc, {value: nextNumber});
 
         // Update local cache
         const localInvoices = await AsyncStorage.getItem('local_invoices');

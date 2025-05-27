@@ -11,12 +11,16 @@ interface InvoiceDetailsModalProps {
 
 const getCategoryDisplay = (category: string): string => {
     switch (category.toLowerCase()) {
-        case 'DryCleaning':
+        case 'drycleaning':
             return 'DC';
-        case 'WashAndIron':
+        case 'washandiron':
             return 'W&I';
-        case 'Wash':
+        case 'wash':
             return 'WASH';
+        case 'package':
+            return 'PKG';
+        case 'package items':
+            return 'INC';
         default:
             return category;
     }
@@ -24,6 +28,91 @@ const getCategoryDisplay = (category: string): string => {
 
 export function InvoiceDetailsModal({ invoice, visible, onClose }: InvoiceDetailsModalProps) {
     if (!invoice) return null;
+
+    // Check if this is a package-based invoice
+    const isPackageInvoice = invoice.packageInfo || invoice.items.some(item => item.category === 'Package');
+
+    const renderPackageSummary = () => {
+        if (!isPackageInvoice || !invoice.packageInfo) return null;
+
+        return (
+            <View style={styles.packageSummary}>
+                <View style={styles.packageHeader}>
+                    <MaterialIcons name="inventory" size={20} color="#4CAF50" />
+                    <Text style={styles.packageTitle}>Package Details</Text>
+                </View>
+                <View style={styles.packageDetails}>
+                    <View style={styles.packageRow}>
+                        <Text style={styles.packageLabel}>Package:</Text>
+                        <Text style={styles.packageValue}>{invoice.packageInfo.packageName}</Text>
+                    </View>
+                    <View style={styles.packageRow}>
+                        <Text style={styles.packageLabel}>Weight:</Text>
+                        <Text style={styles.packageValue}>{invoice.packageInfo.weight} KG</Text>
+                    </View>
+                    <View style={styles.packageRow}>
+                        <Text style={styles.packageLabel}>Rate:</Text>
+                        <Text style={styles.packageValue}>₹{invoice.packageInfo.rate}/KG</Text>
+                    </View>
+                    <View style={styles.packageRow}>
+                        <Text style={styles.packageLabel}>Items:</Text>
+                        <Text style={styles.packageValue}>{invoice.packageInfo.items.length} items</Text>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
+    const renderItemsTable = () => {
+        if (isPackageInvoice && invoice.packageInfo) {
+            // Package-based invoice - show package as main item and individual items as included
+            return (
+                <>
+                    {/* Main package row */}
+                    <View style={styles.tableRow}>
+                        <Text style={[styles.cell, styles.snCell]}>1</Text>
+                        <Text style={[styles.cell, styles.particularCell]}>
+                            {invoice.packageInfo.packageName} ({invoice.packageInfo.weight} KG)
+                        </Text>
+                        <Text style={[styles.cell, styles.typeCell]}>PKG</Text>
+                        <Text style={[styles.cell, styles.qtyCell]}>{invoice.packageInfo.weight}</Text>
+                        <Text style={[styles.cell, styles.rateCell]}>₹{invoice.packageInfo.rate}</Text>
+                        <Text style={[styles.cell, styles.amtCell]}>₹{invoice.packageInfo.total}</Text>
+                    </View>
+
+                    {/* Individual items as included */}
+                    {invoice.packageInfo.items.map((item: any, index: number) => (
+                        <View key={index} style={[styles.tableRow, styles.includedItemRow]}>
+                            <Text style={[styles.cell, styles.snCell]}>{index + 2}</Text>
+                            <Text style={[styles.cell, styles.particularCell, styles.includedItem]}>
+                                ├─ {item.item} (Included)
+                            </Text>
+                            <Text style={[styles.cell, styles.typeCell]}>INC</Text>
+                            <Text style={[styles.cell, styles.qtyCell]}>{item.quantity}</Text>
+                            <Text style={[styles.cell, styles.rateCell]}>₹0</Text>
+                            <Text style={[styles.cell, styles.amtCell]}>₹0</Text>
+                        </View>
+                    ))}
+                </>
+            );
+        } else {
+            // Regular invoice - show all items normally
+            return invoice.items.map((item, index) => (
+                <View key={index} style={styles.tableRow}>
+                    <Text style={[styles.cell, styles.snCell]}>{index + 1}</Text>
+                    <Text style={[styles.cell, styles.particularCell]}>{item.name}</Text>
+                    <Text style={[styles.cell, styles.typeCell]}>
+                        {getCategoryDisplay(item.category)}
+                    </Text>
+                    <Text style={[styles.cell, styles.qtyCell]}>{item.quantity}</Text>
+                    <Text style={[styles.cell, styles.rateCell]}>₹{item.price}</Text>
+                    <Text style={[styles.cell, styles.amtCell]}>
+                        ₹{item.quantity * item.price}
+                    </Text>
+                </View>
+            ));
+        }
+    };
 
     return (
         <Modal
@@ -74,6 +163,8 @@ export function InvoiceDetailsModal({ invoice, visible, onClose }: InvoiceDetail
                                 </View>
                             </View>
 
+                            {renderPackageSummary()}
+
                             <View style={styles.table}>
                                 <View style={styles.tableHeader}>
                                     <Text style={[styles.headerCell, styles.snCell]}>S.N</Text>
@@ -84,20 +175,7 @@ export function InvoiceDetailsModal({ invoice, visible, onClose }: InvoiceDetail
                                     <Text style={[styles.headerCell, styles.amtCell]}>Amt</Text>
                                 </View>
 
-                                {invoice.items.map((item, index) => (
-                                    <View key={index} style={styles.tableRow}>
-                                        <Text style={[styles.cell, styles.snCell]}>{index + 1}</Text>
-                                        <Text style={[styles.cell, styles.particularCell]}>{item.name}</Text>
-                                        <Text style={[styles.cell, styles.typeCell]}>
-                                            {getCategoryDisplay(item.category)}
-                                        </Text>
-                                        <Text style={[styles.cell, styles.qtyCell]}>{item.quantity}</Text>
-                                        <Text style={[styles.cell, styles.rateCell]}>₹{item.price}</Text>
-                                        <Text style={[styles.cell, styles.amtCell]}>
-                                            ₹{item.quantity * item.price}
-                                        </Text>
-                                    </View>
-                                ))}
+                                {renderItemsTable()}
 
                                 <View style={styles.totalRow}>
                                     <Text style={styles.totalLabel}>Total</Text>
@@ -221,6 +299,43 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
         marginTop: 5,
     },
+    packageSummary: {
+        backgroundColor: '#e8f5e8',
+        borderRadius: 8,
+        padding: 15,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#4CAF50',
+    },
+    packageHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    packageTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+        marginLeft: 8,
+    },
+    packageDetails: {
+        paddingLeft: 8,
+    },
+    packageRow: {
+        flexDirection: 'row',
+        marginBottom: 4,
+    },
+    packageLabel: {
+        width: 80,
+        fontWeight: '500',
+        color: '#2e7d32',
+        fontSize: 14,
+    },
+    packageValue: {
+        flex: 1,
+        color: '#1b5e20',
+        fontSize: 14,
+    },
     table: {
         borderWidth: 1,
         borderColor: '#4CAF50',
@@ -265,10 +380,17 @@ const styles = StyleSheet.create({
         borderColor: '#4CAF50',
         padding: 8,
     },
+    includedItemRow: {
+        backgroundColor: '#f8f9fa',
+    },
     cell: {
         fontSize: 12,
         fontFamily: 'Nunito',
         textAlign: 'center',
+    },
+    includedItem: {
+        color: '#666',
+        fontStyle: 'italic',
     },
     totalRow: {
         flexDirection: 'row',
@@ -318,5 +440,6 @@ const styles = StyleSheet.create({
     noteText: {
         fontSize: 12,
         color: '#f57c00',
+        marginBottom: 5,
     },
 });

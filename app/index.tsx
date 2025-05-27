@@ -1,70 +1,12 @@
-// app/index.tsx
-// import React, {useEffect} from 'react';
-// import {router} from 'expo-router';
-// import {setupOfflineSync} from './services/offline-queue';
-// import {View, TouchableOpacity, Text, StyleSheet, SafeAreaView, Image} from 'react-native';
-// import {MaterialIcons} from '@expo/vector-icons';
-// import SettingsScreen from '@/app/screens/settings';
-//
-// export default function Index() {
-//     useEffect(() => {
-//         setupOfflineSync();
-//     }, []);
-//     return (
-//         <SafeAreaView style={styles.container}>
-//             <View style={styles.header}>
-//                 <Image
-//                     source={require('@/assets/dhobighar-logo.png')}
-//                     style={styles.logo}
-//                 />
-//                 <Text style={styles.headerTitle}>DHOBIGHAR</Text>
-//             </View>
-//             <View style={styles.container}>
-//                 <TouchableOpacity
-//                     style={styles.card}
-//                     onPress={() => router.push('/screens/new-bill')}
-//                 >
-//                     <MaterialIcons name="receipt" size={24} color="#4CAF50"/>
-//                     <View style={styles.cardContent}>
-//                         <Text style={styles.cardTitle}>New Invoice</Text>
-//                         <Text style={styles.cardDescription}>Create a new invoice</Text>
-//                     </View>
-//                 </TouchableOpacity>
-//                 <TouchableOpacity
-//                     style={styles.card}
-//                     onPress={() => router.push('/screens/settings')}
-//                 >
-//                     <MaterialIcons name="settings" size={24} color="#4CAF50"/>
-//                     <View style={styles.cardContent}>
-//                         <Text style={styles.cardTitle}>Service Items</Text>
-//                         <Text style={styles.cardDescription}>Manage items and categories</Text>
-//                     </View>
-//                 </TouchableOpacity>
-//
-//                 <TouchableOpacity
-//                     style={styles.card}
-//                     onPress={() => router.push('/screens/InvoicesScreen')}
-//                 >
-//                     <MaterialIcons name="history" size={24} color="#4CAF50"/>
-//                     <View style={styles.cardContent}>
-//                         <Text style={styles.cardTitle}>Invoice History</Text>
-//                         <Text style={styles.cardDescription}>View and manage past invoices</Text>
-//                     </View>
-//                 </TouchableOpacity>
-//             </View>
-//         </SafeAreaView>
-//     );
-// }
-// app/index.tsx
-import React, { useEffect } from 'react';
-import { router } from 'expo-router';
-import { setupOfflineSync } from './services/offline-queue';
-import { View, TouchableOpacity, Text, StyleSheet, SafeAreaView, Image } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import React, {useEffect} from 'react';
+import {router} from 'expo-router';
+import {setupOfflineSync} from './services/offline-queue';
+import {View, TouchableOpacity, Text, StyleSheet, SafeAreaView, Image} from 'react-native';
+import {MaterialIcons} from '@expo/vector-icons';
 import {useAuth} from "@/app/services/AuthContext";
 
 export default function Index() {
-    const { user, loading } = useAuth();
+    const {user, loading} = useAuth();
 
     useEffect(() => {
         setupOfflineSync();
@@ -111,6 +53,17 @@ export default function Index() {
                     <View style={styles.cardContent}>
                         <Text style={styles.cardTitle}>New Invoice</Text>
                         <Text style={styles.cardDescription}>Create a new invoice</Text>
+                    </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.card}
+                    onPress={() => router.push('/screens/payPerkg')}
+                >
+                    <MaterialIcons name="scale" size={24} color="#4CAF50"/>
+                    <View style={styles.cardContent}>
+                        <Text style={styles.cardTitle}>Pay by KG</Text>
+                        <Text style={styles.cardDescription}>Create invoice based on weight</Text>
                     </View>
                 </TouchableOpacity>
 

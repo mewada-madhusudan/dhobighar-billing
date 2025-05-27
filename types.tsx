@@ -1,10 +1,10 @@
-export interface LaundryItem {
-    id: string;
-    name: string;
-    price: number;
-}
+// export interface LaundryItem {
+//     id: string;
+//     name: string;
+//     price: number;
+// }
 
-export type Category = 'Wash' | 'WashAndIron' | 'DryCleaning';
+export type Category = 'Wash' | 'WashAndIron' | 'DryCleaning' | 'Package';
 
 export interface LaundryItem {
     id: string;
@@ -16,6 +16,20 @@ export interface LaundryItem {
 export interface InvoiceItem extends Omit<LaundryItem, 'category'> {
     quantity: number;
     category: string;
+}
+
+// Package-related interfaces
+export interface PackageItem {
+    item: string;
+    quantity: number;
+}
+
+export interface PackageInfo {
+    packageName: string;
+    weight: number;
+    rate: number;
+    total: number;
+    items: PackageItem[];
 }
 
 export interface Invoice {
@@ -31,6 +45,8 @@ export interface Invoice {
     }[];
     total: number;
     phone: string;
+    // Optional package information for package-based invoices
+    packageInfo?: PackageInfo;
 }
 
 // types/index.ts

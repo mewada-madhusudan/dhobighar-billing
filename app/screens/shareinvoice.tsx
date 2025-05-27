@@ -4,18 +4,70 @@ import { LOGO_BASE64 } from '@/assets/logo';
 
 const getCategoryDisplay = (category: string): string => {
     switch (category.toLowerCase()) {
-        case 'DryCleaning':
+        case 'drycleaning':
             return 'DC';
-        case 'WashAndIron':
+        case 'washandiron':
             return 'W&I';
-        case 'Wash':
+        case 'wash':
             return 'Wash';
+        case 'package':
+            return 'PKG';
+        case 'package items':
+            return 'INC';
         default:
             return category;
     }
 };
 
 export const generateInvoicePDF = async (invoice: Invoice) => {
+    // Check if this is a package-based invoice
+    const isPackageInvoice = invoice.packageInfo || invoice.items.some(item => item.category === 'Package');
+
+    let itemsTableContent = '';
+
+    if (isPackageInvoice && invoice.packageInfo) {
+        // Package-based invoice - show package as main item and individual items as included
+        const packageInfo = invoice.packageInfo;
+
+        // Main package row
+        itemsTableContent += `
+            <tr>
+                <td class="sn-cell">1</td>
+                <td class="particular-cell">${packageInfo.packageName} (${packageInfo.weight} KG)</td>
+                <td class="type-cell">PKG</td>
+                <td class="qty-cell">${packageInfo.weight}</td>
+                <td class="rate-cell">₹${packageInfo.rate}</td>
+                <td class="amt-cell">₹${packageInfo.total}</td>
+            </tr>
+        `;
+
+        // Individual items as included (with 0 price)
+        packageInfo.items.forEach((item: any, index: number) => {
+            itemsTableContent += `
+                <tr style="background-color: #f8f9fa;">
+                    <td class="sn-cell">${index + 2}</td>
+                    <td class="particular-cell">├─ ${item.item} (Included)</td>
+                    <td class="type-cell">INC</td>
+                    <td class="qty-cell">${item.quantity}</td>
+                    <td class="rate-cell">₹0</td>
+                    <td class="amt-cell">₹0</td>
+                </tr>
+            `;
+        });
+    } else {
+        // Regular invoice - show all items normally
+        itemsTableContent = invoice.items.map((item, index) => `
+            <tr>
+                <td class="sn-cell">${index + 1}</td>
+                <td class="particular-cell">${item.name}</td>
+                <td class="type-cell">${getCategoryDisplay(item.category)}</td>
+                <td class="qty-cell">${item.quantity}</td>
+                <td class="rate-cell">₹${item.price}</td>
+                <td class="amt-cell">₹${item.quantity * item.price}</td>
+            </tr>
+        `).join('');
+    }
+
     const htmlContent = `
         <!DOCTYPE html>
         <html>
@@ -32,8 +84,8 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                     padding: 40px;
                     margin: 0;
                     color: #333;
-                    width: 230mm; /* A3 width */
-                    min-height: 420mm; /* A3 height */
+                    width: 210mm;
+                    min-height: 297mm;
                     box-sizing: border-box;
                 }
                 .header-container {
@@ -101,21 +153,39 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                     font-weight: 500;
                 }
                 .table th, .table td {
-                    padding: 15px;
-                    font-size: 16px;
+                    padding: 12px;
+                    font-size: 14px;
                     border: 1px solid #4CAF50;
+                    text-align: left;
                 }
-                .sn-cell { width: 5%; }
-                .particular-cell { width: 35%; }
+                .sn-cell { width: 8%; text-align: center; }
+                .particular-cell { width: 40%; }
                 .type-cell { width: 10%; text-align: center; }
                 .qty-cell { width: 10%; text-align: center; }
-                .rate-cell { width: 15%; text-align: right; }
+                .rate-cell { width: 12%; text-align: right; }
                 .amt-cell { width: 15%; text-align: right; }
                 .total-row {
                     background-color: #f0f9f0;
                     font-weight: bold;
                     color: #4CAF50;
+                    font-size: 16px;
+                }
+                .package-summary {
+                    background-color: #e8f5e8;
+                    padding: 15px;
+                    margin-bottom: 20px;
+                    border-radius: 6px;
+                    border: 1px solid #4CAF50;
+                }
+                .package-title {
                     font-size: 18px;
+                    font-weight: bold;
+                    color: #4CAF50;
+                    margin-bottom: 10px;
+                }
+                .package-detail {
+                    margin-bottom: 5px;
+                    font-size: 14px;
                 }
                 .locations-container {
                     margin-top: 40px;
@@ -145,7 +215,7 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                 .note-text {
                     font-size: 16px;
                     color: #f57c00;
-                    margin: 0;
+                    margin: 5px 0;
                 }
             </style>
         </head>
@@ -179,6 +249,16 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                 </div>
             </div>
 
+            ${isPackageInvoice && invoice.packageInfo ? `
+                <div class="package-summary">
+                    <div class="package-title">📦 Package Details</div>
+                    <div class="package-detail"><strong>Package:</strong> ${invoice.packageInfo.packageName}</div>
+                    <div class="package-detail"><strong>Weight:</strong> ${invoice.packageInfo.weight} KG</div>
+                    <div class="package-detail"><strong>Rate:</strong> ₹${invoice.packageInfo.rate}/KG</div>
+                    <div class="package-detail"><strong>Items Included:</strong> ${invoice.packageInfo.items.length} items</div>
+                </div>
+            ` : ''}
+
             <table class="table">
                 <thead class="table-header">
                     <tr>
@@ -191,19 +271,10 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                     </tr>
                 </thead>
                 <tbody>
-                    ${invoice.items.map((item, index) => `
-                        <tr>
-                            <td class="sn-cell">${index + 1}</td>
-                            <td class="particular-cell">${item.name}</td>
-                            <td class="type-cell">${getCategoryDisplay(item.category)}</td>
-                            <td class="qty-cell">${item.quantity}</td>
-                            <td class="rate-cell">₹${item.price}</td>
-                            <td class="amt-cell">₹${item.quantity * item.price}</td>
-                        </tr>
-                    `).join('')}
+                    ${itemsTableContent}
                     <tr class="total-row">
-                        <td colspan="5" style="text-align: right;">Total</td>
-                        <td class="amt-cell">₹${invoice.total}</td>
+                        <td colspan="5" style="text-align: right; font-weight: bold;">Total</td>
+                        <td class="amt-cell" style="font-weight: bold;">₹${invoice.total}</td>
                     </tr>
                 </tbody>
             </table>
