@@ -1,16 +1,3 @@
-// import {Stack} from 'expo-router';
-//
-// export default function Layout() {
-//     return (
-//         <Stack>
-//             <Stack.Screen name="index" options={{title: 'Home'}}/>
-//             <Stack.Screen name="screens/InvoicesScreen" options={{title: 'Invoices'}}/>
-//             <Stack.Screen name="screens/new-bill" options={{title: 'New Bill'}}/>
-//             <Stack.Screen name="screens/customer-details" options={{title: 'Customer Details'}}/>
-//         </Stack>
-//
-//     );
-// }
 import { Stack } from 'expo-router';
 import {AuthProvider, useAuth} from "@/app/services/AuthContext";
 function StackNavigator() {
