@@ -1,5 +1,5 @@
 // firebase/services.ts
-import {collection, addDoc, getDocs, query, orderBy, getDoc, doc, setDoc} from 'firebase/firestore';
+import {collection, getDocs, query, orderBy, getDoc, doc, setDoc} from 'firebase/firestore';
 import {db} from '@/firebase/config';
 import {Invoice} from '@/types';
 import AsyncStorage from "@react-native-async-storage/async-storage";

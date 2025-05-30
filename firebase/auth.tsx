@@ -1,5 +1,5 @@
 // firebase/auth.ts
-import { auth, db } from './config';
+import {auth, db} from './config';
 import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword
@@ -14,7 +14,7 @@ import {
     getDocs,
     updateDoc
 } from 'firebase/firestore';
-import { User } from '@/types';
+import {User} from '@/types';
 
 export const registerUser = async (email: string, password: string, displayName: string) => {
     try {
