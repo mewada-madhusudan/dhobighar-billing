@@ -9,51 +9,130 @@ const getCategoryDisplay = (category: string): string => {
         case 'washandiron':
             return 'W&I';
         case 'wash':
-            return 'Wash';
+            return 'WASH';
         case 'package':
             return 'PKG';
         case 'package items':
             return 'INC';
         default:
+            if (category.startsWith('Package ') && category.includes(' Items')) {
+                return 'INC';
+            }
+            if (category.startsWith('Package ')) {
+                return 'PKG';
+            }
             return category;
     }
 };
 
 export const generateInvoicePDF = async (invoice: Invoice) => {
     // Check if this is a package-based invoice
-    const isPackageInvoice = invoice.packageInfo || invoice.items.some(item => item.category === 'Package');
+    const isPackageInvoice = invoice.packageInfo || invoice.items.some(item =>
+        item.category === 'Package' || item.category.startsWith('Package ')
+    );
 
     let itemsTableContent = '';
+    let packageSummaryContent = '';
 
     if (isPackageInvoice && invoice.packageInfo) {
-        // Package-based invoice - show package as main item and individual items as included
-        const packageInfo = invoice.packageInfo;
+        // Handle multiple packages
+        if ("packages" in invoice.packageInfo && invoice.packageInfo.packages && Array.isArray(invoice.packageInfo.packages)) {
+            const totalWeight = invoice.packageInfo.packages.reduce((sum: number, pkg: any) => sum + (pkg?.weight || 0), 0);
+            const totalItems = invoice.packageInfo.packages.reduce((sum: number, pkg: any) => {
+                return sum + (pkg?.items?.length || 0);
+            }, 0);
 
-        // Main package row
-        itemsTableContent += `
-            <tr>
-                <td class="sn-cell">1</td>
-                <td class="particular-cell">${packageInfo.packageName} (${packageInfo.weight} KG)</td>
-                <td class="type-cell">PKG</td>
-                <td class="qty-cell">${packageInfo.weight}</td>
-                <td class="rate-cell">₹${packageInfo.rate}</td>
-                <td class="amt-cell">₹${packageInfo.total}</td>
-            </tr>
-        `;
+            // Generate package summary for multiple packages
+            packageSummaryContent = `
+                <div class="package-summary">
+                    <div class="package-title">📦 Multiple Packages Details</div>
+                    <div class="package-detail"><strong>Total Packages:</strong> ${invoice.packageInfo.packages.length}</div>
+                    <div class="package-detail"><strong>Total Weight:</strong> ${totalWeight} KG</div>
+                    <div class="package-detail"><strong>Total Items:</strong> ${totalItems} items</div>
+                    
+                    ${invoice.packageInfo.packages.map((pkg: any, index: number) => `
+                        <div class="individual-package">
+                            <div class="individual-package-title">Package ${index + 1}: ${pkg?.packageName || 'Unknown Package'}</div>
+                            <div class="individual-package-details">${pkg?.weight || 0} KG × ₹${pkg?.rate || 0}/KG = ₹${(pkg?.total || 0).toFixed(2)}</div>
+                            <div class="individual-package-items">Items: ${pkg?.items?.map((item: any) => item?.item || 'Unknown Item').join(', ') || 'No items'}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
 
-        // Individual items as included (with 0 price)
-        packageInfo.items.forEach((item: any, index: number) => {
+            // Generate table rows for multiple packages
+            let packageNumber = 1;
+            invoice.packageInfo.packages.forEach((pkg: any, pkgIndex: number) => {
+                // Main package row
+                itemsTableContent += `
+                    <tr>
+                        <td class="sn-cell">${packageNumber++}</td>
+                        <td class="particular-cell">${pkg?.packageName || 'Unknown Package'} (${pkg?.weight || 0} KG)</td>
+                        <td class="type-cell">PKG</td>
+                        <td class="qty-cell">${pkg?.weight || 0}</td>
+                        <td class="rate-cell">₹${pkg?.rate || 0}</td>
+                        <td class="amt-cell">₹${(pkg?.total || 0).toFixed(2)}</td>
+                    </tr>
+                `;
+
+                // Individual items as included (no numbering)
+                if (pkg?.items && Array.isArray(pkg.items)) {
+                    pkg.items.forEach((item: any, itemIndex: number) => {
+                        itemsTableContent += `
+                            <tr style="background-color: #f8f9fa;">
+                                <td class="sn-cell">-</td>
+                                <td class="particular-cell included-item">├─ ${item?.item || 'Unknown Item'} (Included)</td>
+                                <td class="type-cell">INC</td>
+                                <td class="qty-cell">${item?.quantity || 0}</td>
+                                <td class="rate-cell">₹0</td>
+                                <td class="amt-cell">₹0</td>
+                            </tr>
+                        `;
+                    });
+                }
+            });
+        }
+        // Handle single package (backward compatibility)
+        else if ("packageName" in invoice.packageInfo && invoice.packageInfo.packageName) {
+            // Generate package summary for single package
+            packageSummaryContent = `
+                <div class="package-summary">
+                    <div class="package-title">📦 Package Details</div>
+                    <div class="package-detail"><strong>Package:</strong> ${invoice.packageInfo.packageName}</div>
+                    <div class="package-detail"><strong>Weight:</strong> ${invoice.packageInfo.weight || 0} KG</div>
+                    <div class="package-detail"><strong>Rate:</strong> ₹${invoice.packageInfo.rate || 0}/KG</div>
+                    <div class="package-detail"><strong>Items Included:</strong> ${invoice.packageInfo.items?.length || 0} items</div>
+                </div>
+            `;
+
+            // Main package row
             itemsTableContent += `
-                <tr style="background-color: #f8f9fa;">
-                    <td class="sn-cell">${index + 2}</td>
-                    <td class="particular-cell">├─ ${item.item} (Included)</td>
-                    <td class="type-cell">INC</td>
-                    <td class="qty-cell">${item.quantity}</td>
-                    <td class="rate-cell">₹0</td>
-                    <td class="amt-cell">₹0</td>
+                <tr>
+                    <td class="sn-cell">1</td>
+                    <td class="particular-cell">${invoice.packageInfo.packageName} (${invoice.packageInfo.weight || 0} KG)</td>
+                    <td class="type-cell">PKG</td>
+                    <td class="qty-cell">${invoice.packageInfo.weight || 0}</td>
+                    <td class="rate-cell">₹${invoice.packageInfo.rate || 0}</td>
+                    <td class="amt-cell">₹${invoice.packageInfo.total || 0}</td>
                 </tr>
             `;
-        });
+
+            // Individual items as included (no numbering)
+            if (invoice.packageInfo.items && Array.isArray(invoice.packageInfo.items)) {
+                invoice.packageInfo.items.forEach((item: any, index: number) => {
+                    itemsTableContent += `
+                        <tr style="background-color: #f8f9fa;">
+                            <td class="sn-cell">-</td>
+                            <td class="particular-cell included-item">├─ ${item?.item || 'Unknown Item'} (Included)</td>
+                            <td class="type-cell">INC</td>
+                            <td class="qty-cell">${item?.quantity || 0}</td>
+                            <td class="rate-cell">₹0</td>
+                            <td class="amt-cell">₹0</td>
+                        </tr>
+                    `;
+                });
+            }
+        }
     } else {
         // Regular invoice - show all items normally
         itemsTableContent = invoice.items.map((item, index) => `
@@ -63,7 +142,7 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                 <td class="type-cell">${getCategoryDisplay(item.category)}</td>
                 <td class="qty-cell">${item.quantity}</td>
                 <td class="rate-cell">₹${item.price}</td>
-                <td class="amt-cell">₹${item.quantity * item.price}</td>
+                <td class="amt-cell">₹${(item.quantity * item.price).toFixed(2)}</td>
             </tr>
         `).join('');
     }
@@ -164,6 +243,10 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                 .qty-cell { width: 10%; text-align: center; }
                 .rate-cell { width: 12%; text-align: right; }
                 .amt-cell { width: 15%; text-align: right; }
+                .included-item {
+                    color: #666;
+                    font-style: italic;
+                }
                 .total-row {
                     background-color: #f0f9f0;
                     font-weight: bold;
@@ -172,20 +255,44 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                 }
                 .package-summary {
                     background-color: #e8f5e8;
-                    padding: 15px;
-                    margin-bottom: 20px;
-                    border-radius: 6px;
-                    border: 1px solid #4CAF50;
+                    padding: 20px;
+                    margin-bottom: 25px;
+                    border-radius: 8px;
+                    border: 2px solid #4CAF50;
                 }
                 .package-title {
-                    font-size: 18px;
+                    font-size: 20px;
                     font-weight: bold;
                     color: #4CAF50;
-                    margin-bottom: 10px;
+                    margin-bottom: 15px;
                 }
                 .package-detail {
-                    margin-bottom: 5px;
+                    margin-bottom: 8px;
+                    font-size: 16px;
+                    color: #2e7d32;
+                }
+                .individual-package {
+                    background-color: #f1f8e9;
+                    padding: 15px;
+                    border-radius: 6px;
+                    margin-top: 15px;
+                    border: 1px solid #c8e6c9;
+                }
+                .individual-package-title {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #2e7d32;
+                    margin-bottom: 8px;
+                }
+                .individual-package-details {
                     font-size: 14px;
+                    color: #388e3c;
+                    margin-bottom: 8px;
+                }
+                .individual-package-items {
+                    font-size: 13px;
+                    color: #4caf50;
+                    font-style: italic;
                 }
                 .locations-container {
                     margin-top: 40px;
@@ -249,15 +356,7 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                 </div>
             </div>
 
-            ${isPackageInvoice && invoice.packageInfo ? `
-                <div class="package-summary">
-                    <div class="package-title">📦 Package Details</div>
-                    <div class="package-detail"><strong>Package:</strong> ${invoice.packageInfo.packageName}</div>
-                    <div class="package-detail"><strong>Weight:</strong> ${invoice.packageInfo.weight} KG</div>
-                    <div class="package-detail"><strong>Rate:</strong> ₹${invoice.packageInfo.rate}/KG</div>
-                    <div class="package-detail"><strong>Items Included:</strong> ${invoice.packageInfo.items.length} items</div>
-                </div>
-            ` : ''}
+            ${packageSummaryContent}
 
             <table class="table">
                 <thead class="table-header">
@@ -274,7 +373,7 @@ export const generateInvoicePDF = async (invoice: Invoice) => {
                     ${itemsTableContent}
                     <tr class="total-row">
                         <td colspan="5" style="text-align: right; font-weight: bold;">Total</td>
-                        <td class="amt-cell" style="font-weight: bold;">₹${invoice.total}</td>
+                        <td class="amt-cell" style="font-weight: bold;">₹${invoice.total.toFixed(2)}</td>
                     </tr>
                 </tbody>
             </table>

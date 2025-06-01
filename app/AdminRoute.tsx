@@ -3,7 +3,7 @@ import React from 'react';
 import {View, Text} from 'react-native';
 import {useAuth} from "@/app/services/AuthContext";
 
-export const AdminRoute = ({children}: { children: React.ReactNode }) => {
+const AdminRoute = ({children}: { children: React.ReactNode }) => {
     const {user, loading} = useAuth();
 
     if (loading) {
@@ -25,3 +25,4 @@ export const AdminRoute = ({children}: { children: React.ReactNode }) => {
     return <>{children}</>;
 };
 
+export default AdminRoute;

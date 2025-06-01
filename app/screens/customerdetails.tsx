@@ -1,5 +1,15 @@
 import React, {useState} from 'react';
-import {View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Linking} from 'react-native';
+import {
+    View,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    KeyboardAvoidingView,
+    StyleSheet,
+    Alert,
+    Linking,
+    ScrollView, Platform
+} from 'react-native';
 import {router, useLocalSearchParams} from 'expo-router';
 import type {Invoice} from '@/types';
 import {useItems} from '@/stores/useItems';
@@ -18,8 +28,14 @@ export default function Customerdetails() {
 
     const calculateTotal = () => {
         if (packageInfo) {
-            // For package-based billing, use the total from package calculation
-            return packageInfo.total;
+            // For package-based billing - check if it's single or multiple packages
+            if (packageInfo.packages && Array.isArray(packageInfo.packages)) {
+                // Multiple packages: use grandTotal
+                return packageInfo.grandTotal;
+            } else {
+                // Single package: use total (backward compatibility)
+                return packageInfo.total;
+            }
         }
 
         // For regular item-based billing
@@ -41,14 +57,29 @@ export default function Customerdetails() {
         let formattedItems: string;
 
         if (packageInfo) {
-            // Format for package-based billing
-            const itemsList = packageInfo.items
-                .map((item: any) => `   • ${item.item} (Qty: ${item.quantity})`)
-                .join('\n');
+            if (packageInfo.packages && Array.isArray(packageInfo.packages)) {
+                // Multiple packages format
+                formattedItems = packageInfo.packages
+                    .map((pkg: any, index: number) => {
+                        const itemsList = pkg.items
+                            .map((item: any) => `     • ${item.item} (Qty: ${item.quantity})`)
+                            .join('\n');
 
-            formattedItems = `📦 *${packageInfo.packageName}*\n` +
-                `Weight: ${packageInfo.weight} KG × ₹${packageInfo.rate}/KG = ₹${packageInfo.total}\n\n` +
-                `📋 *Items Included:*\n${itemsList}`;
+                        return `📦 *Package ${index + 1}: ${pkg.packageName}*\n` +
+                            `   Weight: ${pkg.weight} KG × ₹${pkg.rate}/KG = ₹${pkg.total.toFixed(2)}\n\n` +
+                            `   📋 *Items Included:*\n${itemsList}`;
+                    })
+                    .join('\n\n');
+            } else {
+                // Single package format (backward compatibility)
+                const itemsList = packageInfo.items
+                    .map((item: any) => `   • ${item.item} (Qty: ${item.quantity})`)
+                    .join('\n');
+
+                formattedItems = `📦 *${packageInfo.packageName}*\n` +
+                    `Weight: ${packageInfo.weight} KG × ₹${packageInfo.rate}/KG = ₹${packageInfo.total}\n\n` +
+                    `📋 *Items Included:*\n${itemsList}`;
+            }
         } else {
             // Format for regular item-based billing
             const groupedItems = invoice.items.reduce((acc, item) => {
@@ -102,25 +133,50 @@ export default function Customerdetails() {
             let itemsList: any[] = [];
 
             if (packageInfo) {
-                // Create items list for package-based billing
-                itemsList = [{
-                    id: `pkg_${Date.now()}`,
-                    name: `${packageInfo.packageName} (${packageInfo.weight} KG)`,
-                    quantity: packageInfo.weight,
-                    price: packageInfo.rate,
-                    category: 'Package'
-                }];
+                if (packageInfo.packages && Array.isArray(packageInfo.packages)) {
+                    // Multiple packages - create items for each package
+                    packageInfo.packages.forEach((pkg: any, pkgIndex: number) => {
+                        // Add package entry
+                        itemsList.push({
+                            id: `pkg_${pkgIndex}_${Date.now()}`,
+                            name: `${pkg.packageName} (${pkg.weight} KG)`,
+                            quantity: pkg.weight,
+                            price: pkg.rate,
+                            category: `Package ${pkgIndex + 1}`
+                        });
 
-                // Add individual items as additional entries for record keeping
-                packageInfo.items.forEach((item: any, index: number) => {
-                    itemsList.push({
-                        id: `item_${Date.now()}_${index}`,
-                        name: `${item.item} (Included)`,
-                        quantity: item.quantity,
-                        price: 0, // Price is 0 since it's included in package
-                        category: 'Package Items'
+                        // Add individual items as additional entries for record keeping
+                        pkg.items.forEach((item: any, itemIndex: number) => {
+                            itemsList.push({
+                                id: `item_${pkgIndex}_${itemIndex}_${Date.now()}`,
+                                name: `${item.item} (Included in ${pkg.packageName})`,
+                                quantity: item.quantity,
+                                price: 0, // Price is 0 since it's included in package
+                                category: `Package ${pkgIndex + 1} Items`
+                            });
+                        });
                     });
-                });
+                } else {
+                    // Single package (backward compatibility)
+                    itemsList = [{
+                        id: `pkg_${Date.now()}`,
+                        name: `${packageInfo.packageName} (${packageInfo.weight} KG)`,
+                        quantity: packageInfo.weight,
+                        price: packageInfo.rate,
+                        category: 'Package'
+                    }];
+
+                    // Add individual items as additional entries for record keeping
+                    packageInfo.items.forEach((item: any, index: number) => {
+                        itemsList.push({
+                            id: `item_${Date.now()}_${index}`,
+                            name: `${item.item} (Included)`,
+                            quantity: item.quantity,
+                            price: 0, // Price is 0 since it's included in package
+                            category: 'Package Items'
+                        });
+                    });
+                }
             } else {
                 // Create items list for regular billing
                 itemsList = Object.entries(cart).map(([itemId, quantity]) => {
@@ -165,40 +221,88 @@ export default function Customerdetails() {
         }
     };
 
-    // Display summary based on billing type
     const renderOrderSummary = () => {
         if (packageInfo) {
-            return (
-                <View style={styles.summaryContainer}>
-                    <Text style={styles.summaryTitle}>Order Summary</Text>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Package:</Text>
-                        <Text style={styles.summaryValue}>{packageInfo.packageName}</Text>
+            if (packageInfo.packages && Array.isArray(packageInfo.packages)) {
+                // Multiple packages summary
+                const totalWeight = packageInfo.packages.reduce((sum: number, pkg: any) => sum + (pkg?.weight || 0), 0);
+                const totalItems = packageInfo.packages.reduce((sum: number, pkg: any) => {
+                    return sum + (pkg?.items?.length || 0);
+                }, 0);
+
+                return (
+                    <View style={styles.summaryContainer}>
+                        <Text style={styles.summaryTitle}>Order Summary</Text>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Packages:</Text>
+                            <Text style={styles.summaryValue}>{packageInfo.packages.length} packages</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Total Weight:</Text>
+                            <Text style={styles.summaryValue}>{totalWeight} KG</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Total Items:</Text>
+                            <Text style={styles.summaryValue}>{totalItems} items</Text>
+                        </View>
+
+                        {/* Individual package details */}
+                        {packageInfo.packages.map((pkg: any, index: number) => (
+                            <View key={index} style={styles.packageDetailContainer}>
+                                <Text style={styles.packageDetailTitle}>
+                                    Package {index + 1}: {pkg?.packageName || 'Unknown Package'}
+                                </Text>
+                                <View style={styles.packageDetailRow}>
+                                    <Text style={styles.packageDetailLabel}>
+                                        Weight: {pkg?.weight || 0} KG × ₹{pkg?.rate || 0}/KG
+                                    </Text>
+                                    <Text style={styles.packageDetailValue}>₹{(pkg?.total || 0).toFixed(2)}</Text>
+                                </View>
+                                <Text style={styles.packageDetailItems}>
+                                    Items: {pkg?.items?.map((item: any) => item?.item || 'Unknown Item').join(', ') || 'No items'}
+                                </Text>
+                            </View>
+                        ))}
+
+                        <View style={[styles.summaryRow, styles.totalRow]}>
+                            <Text style={styles.totalLabel}>Grand Total:</Text>
+                            <Text style={styles.totalValue}>₹{(packageInfo.grandTotal || 0).toFixed(2)}</Text>
+                        </View>
                     </View>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Weight:</Text>
-                        <Text style={styles.summaryValue}>{packageInfo.weight} KG</Text>
+                );
+            } else {
+                // Single package summary (backward compatibility)
+                return (
+                    <View style={styles.summaryContainer}>
+                        <Text style={styles.summaryTitle}>Order Summary</Text>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Package:</Text>
+                            <Text style={styles.summaryValue}>{packageInfo.packageName || 'Unknown Package'}</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Weight:</Text>
+                            <Text style={styles.summaryValue}>{packageInfo.weight || 0} KG</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Rate:</Text>
+                            <Text style={styles.summaryValue}>₹{packageInfo.rate || 0}/KG</Text>
+                        </View>
+                        <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Items:</Text>
+                            <Text style={styles.summaryValue}>{packageInfo.items?.length || 0} items</Text>
+                        </View>
+                        <View style={[styles.summaryRow, styles.totalRow]}>
+                            <Text style={styles.totalLabel}>Total:</Text>
+                            <Text style={styles.totalValue}>₹{(packageInfo.total || 0).toFixed(2)}</Text>
+                        </View>
                     </View>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Rate:</Text>
-                        <Text style={styles.summaryValue}>₹{packageInfo.rate}/KG</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Items:</Text>
-                        <Text style={styles.summaryValue}>{packageInfo.items.length} items</Text>
-                    </View>
-                    <View style={[styles.summaryRow, styles.totalRow]}>
-                        <Text style={styles.totalLabel}>Total:</Text>
-                        <Text style={styles.totalValue}>₹{packageInfo.total.toFixed(2)}</Text>
-                    </View>
-                </View>
-            );
+                );
+            }
         }
 
-        // Regular item summary would go here if needed
+        // Regular item summary
         const totalAmount = calculateTotal();
         const itemCount = Object.values(cart).reduce((sum: number, qty) => sum + (qty as number), 0);
-
 
         return (
             <View style={styles.summaryContainer}>
@@ -216,73 +320,90 @@ export default function Customerdetails() {
     };
 
     return (
-        <View style={styles.container}>
-            <View style={styles.card}>
-                <Text style={styles.heading}>Customer Details</Text>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={'position'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        >
+            <ScrollView
+                contentContainerStyle={styles.scrollContainer}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+            >
+                <View style={styles.card}>
+                    <Text style={styles.heading}>Customer Details</Text>
 
-                {renderOrderSummary()}
+                    {renderOrderSummary()}
 
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Name</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter customer name"
-                        placeholderTextColor="#9CA3AF"
-                        value={name}
-                        onChangeText={setName}
-                    />
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Name</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Enter customer name"
+                            placeholderTextColor="#9CA3AF"
+                            value={name}
+                            onChangeText={setName}
+                            returnKeyType="next"
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Phone Number</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Enter phone number"
+                            placeholderTextColor="#9CA3AF"
+                            value={phone}
+                            onChangeText={setPhone}
+                            keyboardType="phone-pad"
+                            maxLength={12}
+                            returnKeyType="next"
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Address</Text>
+                        <TextInput
+                            style={[styles.input, styles.addressInput]}
+                            placeholder="Enter delivery address"
+                            placeholderTextColor="#9CA3AF"
+                            value={address}
+                            onChangeText={setAddress}
+                            multiline
+                            numberOfLines={3}
+                            returnKeyType="done"
+                        />
+                    </View>
+
+                    <TouchableOpacity
+                        style={[styles.button, (!name || !phone) && styles.disabledButton]}
+                        onPress={handleSubmit}
+                        disabled={!name || !phone}
+                    >
+                        <Text style={styles.buttonText}>
+                            Generate & Share Bill
+                        </Text>
+                    </TouchableOpacity>
                 </View>
-
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Phone Number</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Enter phone number"
-                        placeholderTextColor="#9CA3AF"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                        maxLength={12}
-                    />
-                </View>
-
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Address</Text>
-                    <TextInput
-                        style={[styles.input, styles.addressInput]}
-                        placeholder="Enter delivery address"
-                        placeholderTextColor="#9CA3AF"
-                        value={address}
-                        onChangeText={setAddress}
-                        multiline
-                        numberOfLines={3}
-                    />
-                </View>
-
-                <TouchableOpacity
-                    style={[styles.button, (!name || !phone) && styles.disabledButton]}
-                    onPress={handleSubmit}
-                    disabled={!name || !phone}
-                >
-                    <Text style={styles.buttonText}>
-                        Generate & Share Bill
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </View>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        padding: 16,
         backgroundColor: '#F3F4F6',
+    },
+    scrollContainer: {
+        flexGrow: 1,
+        padding: 10,
     },
     card: {
         backgroundColor: '#FFFFFF',
         borderRadius: 12,
-        padding: 20,
+        padding: 10,
+        margin: 8,
         shadowColor: '#000',
         shadowOffset: {
             width: 0,
@@ -326,6 +447,40 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#1E293B',
         fontWeight: '500',
+    },
+    packageDetailContainer: {
+        backgroundColor: '#FFFFFF',
+        padding: 12,
+        borderRadius: 6,
+        marginVertical: 8,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    packageDetailTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#1E293B',
+        marginBottom: 4,
+    },
+    packageDetailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    packageDetailLabel: {
+        fontSize: 13,
+        color: '#64748B',
+    },
+    packageDetailValue: {
+        fontSize: 13,
+        color: '#1E293B',
+        fontWeight: '500',
+    },
+    packageDetailItems: {
+        fontSize: 12,
+        color: '#64748B',
+        fontStyle: 'italic',
     },
     totalRow: {
         borderTopWidth: 1,

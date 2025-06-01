@@ -8,7 +8,7 @@ import {
     TextInput,
     ScrollView,
     Alert,
-    ActivityIndicator
+    ActivityIndicator, Image
 } from 'react-native';
 import {MaterialIcons} from '@expo/vector-icons';
 import {router} from 'expo-router';
@@ -27,7 +27,17 @@ interface InvoiceItem {
     quantity: number;
 }
 
+interface PackageEntry {
+    packageId: string;
+    packageName: string;
+    rate: number;
+    weight: number;
+    total: number;
+    items: InvoiceItem[];
+}
+
 export default function PayByKGScreen() {
+    // Current package being added
     const [selectedPackage, setSelectedPackage] = useState<string>('');
     const [rate, setRate] = useState<string>('');
     const [weight, setWeight] = useState<string>('');
@@ -35,7 +45,10 @@ export default function PayByKGScreen() {
     const [item, setItem] = useState<string>('');
     const [quantity, setQuantity] = useState<string>('');
     const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
+
+    // All packages data and added packages
     const [packages, setPackages] = useState<PackageItem[]>([]);
+    const [addedPackages, setAddedPackages] = useState<PackageEntry[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
 
     useEffect(() => {
@@ -105,43 +118,115 @@ export default function PayByKGScreen() {
         setInvoiceItems(updatedItems);
     };
 
-    const proceedToCustomerDetails = () => {
+    const addPackageToInvoice = () => {
         if (!selectedPackage || !weight || parseFloat(weight) <= 0) {
             Alert.alert('Error', 'Please select a package and enter valid weight');
             return;
         }
 
         if (invoiceItems.length === 0) {
-            Alert.alert('Error', 'Please add at least one item to proceed');
+            Alert.alert('Error', 'Please add at least one item for this package');
             return;
         }
 
-        // Create a cart-like structure for the pay-per-kg items
-        // We'll create virtual items with unique IDs based on the package and items
+        // Check if this package is already added
+        const existingPackageIndex = addedPackages.findIndex(pkg => pkg.packageId === selectedPackage);
+
+        if (existingPackageIndex >= 0) {
+            Alert.alert(
+                'Package Already Added',
+                'This package is already in the invoice. Do you want to replace it or cancel?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Replace',
+                        onPress: () => {
+                            const updatedPackages = [...addedPackages];
+                            updatedPackages[existingPackageIndex] = createPackageEntry();
+                            setAddedPackages(updatedPackages);
+                            resetCurrentPackage();
+                        }
+                    }
+                ]
+            );
+            return;
+        }
+
+        // Add new package entry
+        const newPackageEntry = createPackageEntry();
+        setAddedPackages([...addedPackages, newPackageEntry]);
+        resetCurrentPackage();
+    };
+
+    const createPackageEntry = (): PackageEntry => {
+        const selectedPkg = packages.find(pkg => pkg.id === selectedPackage);
+        return {
+            packageId: selectedPackage,
+            packageName: selectedPkg?.package_name || '',
+            rate: parseFloat(rate),
+            weight: parseFloat(weight),
+            total: total,
+            items: [...invoiceItems]
+        };
+    };
+
+    const resetCurrentPackage = () => {
+        setSelectedPackage('');
+        setRate('');
+        setWeight('');
+        setTotal(0);
+        setInvoiceItems([]);
+        setItem('');
+        setQuantity('');
+    };
+
+    const removePackageFromInvoice = (index: number) => {
+        Alert.alert(
+            'Remove Package',
+            'Are you sure you want to remove this package from the invoice?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Remove',
+                    style: 'destructive',
+                    onPress: () => {
+                        const updatedPackages = addedPackages.filter((_, i) => i !== index);
+                        setAddedPackages(updatedPackages);
+                    }
+                }
+            ]
+        );
+    };
+
+    const calculateGrandTotal = () => {
+        return addedPackages.reduce((sum, pkg) => sum + pkg.total, 0);
+    };
+
+    const proceedToCustomerDetails = () => {
+        if (addedPackages.length === 0) {
+            Alert.alert('Error', 'Please add at least one package to proceed');
+            return;
+        }
+
+        // Create cart structure for multiple packages
         const cart: Record<string, number> = {};
         const prices: Record<string, number> = {};
 
-        // Create a single cart entry for the package-based calculation
-        const packageItem = packages.find(p => p.id === selectedPackage);
-        if (packageItem) {
-            // Use the package ID as the cart item ID
-            const cartItemId = `pkg_${selectedPackage}`;
-            cart[cartItemId] = parseFloat(weight); // Use weight as quantity
-            prices[cartItemId] = parseFloat(rate); // Use rate as price per unit
-        }
+        addedPackages.forEach((pkg, index) => {
+            const cartItemId = `pkg_${pkg.packageId}_${index}`;
+            cart[cartItemId] = pkg.weight;
+            prices[cartItemId] = pkg.rate;
+        });
 
-        // Navigate to customer details with the cart and package info
+        // Navigate to customer details with all package info
         router.push({
             pathname: '/screens/customerdetails',
             params: {
                 cart: JSON.stringify(cart),
                 prices: JSON.stringify(prices),
                 packageInfo: JSON.stringify({
-                    packageName: packageItem?.package_name,
-                    weight: parseFloat(weight),
-                    rate: parseFloat(rate),
-                    total: total,
-                    items: invoiceItems
+                    packages: addedPackages,
+                    grandTotal: calculateGrandTotal()
                 })
             }
         });
@@ -149,130 +234,178 @@ export default function PayByKGScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <MaterialIcons name="arrow-back" size={24} color="#4CAF50"/>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Pay by KG</Text>
-            </View>
-
-            <ScrollView style={styles.content}>
+            <ScrollView
+                style={styles.content}
+            >
                 {loading ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color="#4CAF50"/>
                         <Text style={styles.loadingText}>Loading packages...</Text>
                     </View>
                 ) : (
-                    <View style={styles.formContainer}>
-                        {/* Package Dropdown */}
-                        <View style={styles.inputGroup}>
-                            <Text style={styles.label}>PACKAGES</Text>
-                            <View style={styles.pickerContainer}>
-                                <Picker
-                                    selectedValue={selectedPackage}
-                                    onValueChange={handlePackageChange}
-                                    style={styles.picker}
-                                >
-                                    <Picker.Item label="Select Package" value=""/>
-                                    {packages.map(pkg => (
-                                        <Picker.Item
-                                            key={pkg.id}
-                                            label={pkg.package_name}
-                                            value={pkg.id}
-                                        />
-                                    ))}
-                                </Picker>
-                            </View>
-                        </View>
+                    <View>
+                        {/* Current Package Form */}
+                        <View style={styles.formContainer}>
+                            <Text style={styles.sectionTitle}>Add Package</Text>
 
-                        {/* Rate, Weight, Total Row */}
-                        <View style={styles.topRow}>
-                            <View style={styles.rateInput}>
-                                <Text style={styles.label}>RATE</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={rate}
-                                    onChangeText={setRate}
-                                    placeholder="Rate per KG"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <View style={styles.weightInput}>
-                                <Text style={styles.label}>WEIGHT</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={weight}
-                                    onChangeText={setWeight}
-                                    placeholder="KG"
-                                    keyboardType="numeric"
-                                />
-                            </View>
-
-                            <View style={styles.totalInput}>
-                                <Text style={styles.label}>TOTAL</Text>
-                                <View style={[styles.input, styles.totalDisplay]}>
-                                    <Text style={styles.totalText}>₹{total.toFixed(2)}</Text>
+                            {/* Package Dropdown */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>PACKAGES</Text>
+                                <View style={styles.pickerContainer}>
+                                    <Picker
+                                        selectedValue={selectedPackage}
+                                        onValueChange={handlePackageChange}
+                                        style={styles.picker}
+                                    >
+                                        <Picker.Item label="Select Package" value=""/>
+                                        {packages.map(pkg => (
+                                            <Picker.Item
+                                                key={pkg.id}
+                                                label={pkg.package_name}
+                                                value={pkg.id}
+                                            />
+                                        ))}
+                                    </Picker>
                                 </View>
                             </View>
-                        </View>
 
-                        {/* Item and Quantity Row */}
-                        <View style={styles.itemRow}>
-                            <View style={styles.itemInput}>
-                                <Text style={styles.label}>ITEM</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={item}
-                                    onChangeText={setItem}
-                                    placeholder="Enter item name"
-                                />
+                            {/* Rate, Weight, Total Row */}
+                            <View style={styles.topRow}>
+                                <View style={styles.rateInput}>
+                                    <Text style={styles.label}>RATE</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={rate}
+                                        onChangeText={setRate}
+                                        placeholder="Rate per KG"
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+
+                                <View style={styles.weightInput}>
+                                    <Text style={styles.label}>WEIGHT</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={weight}
+                                        onChangeText={setWeight}
+                                        placeholder="KG"
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+
+                                <View style={styles.totalInput}>
+                                    <Text style={styles.label}>TOTAL</Text>
+                                    <View style={[styles.input, styles.totalDisplay]}>
+                                        <Text style={styles.totalText}>₹{total.toFixed(2)}</Text>
+                                    </View>
+                                </View>
                             </View>
 
-                            <View style={styles.quantityInput}>
-                                <Text style={styles.label}>Quantity</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={quantity}
-                                    onChangeText={setQuantity}
-                                    placeholder="Qty"
-                                    keyboardType="numeric"
-                                />
+                            {/* Item and Quantity Row */}
+                            <View style={styles.itemRow}>
+                                <View style={styles.itemInput}>
+                                    <Text style={styles.label}>ITEM</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={item}
+                                        onChangeText={setItem}
+                                        placeholder="Enter item name"
+                                    />
+                                </View>
+
+                                <View style={styles.quantityInput}>
+                                    <Text style={styles.label}>Quantity</Text>
+                                    <TextInput
+                                        style={styles.input}
+                                        value={quantity}
+                                        onChangeText={setQuantity}
+                                        placeholder="Qty"
+                                        keyboardType="numeric"
+                                    />
+                                </View>
+
+                                <TouchableOpacity style={styles.addButton} onPress={addInvoiceItem}>
+                                    <MaterialIcons name="add" size={24} color="#4CAF50"/>
+                                </TouchableOpacity>
                             </View>
 
-                            <TouchableOpacity style={styles.addButton} onPress={addInvoiceItem}>
-                                <MaterialIcons name="add" size={24} color="#4CAF50"/>
+                            {/* Current Package Items List */}
+                            {invoiceItems.length > 0 && (
+                                <View style={styles.itemsList}>
+                                    <Text style={styles.itemsListTitle}>Items for this package:</Text>
+                                    {invoiceItems.map((invoiceItem, index) => (
+                                        <View key={index} style={styles.itemRowDisplay}>
+                                            <View style={styles.itemDetails}>
+                                                <Text style={styles.itemName}>{invoiceItem.item}</Text>
+                                                <Text style={styles.itemInfo}>Quantity: {invoiceItem.quantity}</Text>
+                                            </View>
+                                            <TouchableOpacity
+                                                onPress={() => removeInvoiceItem(index)}
+                                                style={styles.removeButton}
+                                            >
+                                                <MaterialIcons name="delete" size={20} color="#f44336"/>
+                                            </TouchableOpacity>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
+
+                            <TouchableOpacity
+                                style={[
+                                    styles.addPackageButton,
+                                    (!selectedPackage || !weight || parseFloat(weight) <= 0 || invoiceItems.length === 0) && styles.disabledButton
+                                ]}
+                                onPress={addPackageToInvoice}
+                                disabled={!selectedPackage || !weight || parseFloat(weight) <= 0 || invoiceItems.length === 0}
+                            >
+                                <Text style={styles.addPackageButtonText}>Add Package to Invoice</Text>
                             </TouchableOpacity>
                         </View>
 
-                        {/* Added Items List */}
-                        {invoiceItems.length > 0 && (
-                            <View style={styles.itemsList}>
-                                <Text style={styles.itemsListTitle}>Added Items:</Text>
-                                {invoiceItems.map((invoiceItem, index) => (
-                                    <View key={index} style={styles.itemRowDisplay}>
-                                        <View style={styles.itemDetails}>
-                                            <Text style={styles.itemName}>{invoiceItem.item}</Text>
-                                            <Text style={styles.itemInfo}>Quantity: {invoiceItem.quantity}</Text>
+                        {/* Added Packages List */}
+                        {addedPackages.length > 0 && (
+                            <View style={styles.addedPackagesContainer}>
+                                <Text style={styles.sectionTitle}>Added Packages</Text>
+                                {addedPackages.map((pkg, index) => (
+                                    <View key={index} style={styles.packageCard}>
+                                        <View style={styles.packageHeader}>
+                                            <Text style={styles.packageName}>{pkg.packageName}</Text>
+                                            <TouchableOpacity
+                                                onPress={() => removePackageFromInvoice(index)}
+                                                style={styles.removePackageButton}
+                                            >
+                                                <MaterialIcons name="delete" size={20} color="#f44336"/>
+                                            </TouchableOpacity>
                                         </View>
-                                        <TouchableOpacity
-                                            onPress={() => removeInvoiceItem(index)}
-                                            style={styles.removeButton}
-                                        >
-                                            <MaterialIcons name="delete" size={20} color="#f44336"/>
-                                        </TouchableOpacity>
+                                        <Text style={styles.packageDetails}>
+                                            Weight: {pkg.weight} KG | Rate: ₹{pkg.rate}/KG | Total: ₹{pkg.total.toFixed(2)}
+                                        </Text>
+                                        <View style={styles.packageItems}>
+                                            <Text style={styles.itemsTitle}>Items:</Text>
+                                            {pkg.items.map((item, itemIndex) => (
+                                                <Text key={itemIndex} style={styles.packageItemText}>
+                                                    • {item.item} (Qty: {item.quantity})
+                                                </Text>
+                                            ))}
+                                        </View>
                                     </View>
                                 ))}
+
+                                <View style={styles.grandTotalContainer}>
+                                    <Text style={styles.grandTotalText}>
+                                        Grand Total: ₹{calculateGrandTotal().toFixed(2)}
+                                    </Text>
+                                </View>
                             </View>
                         )}
 
                         <TouchableOpacity
                             style={[
                                 styles.generateButton,
-                                (!selectedPackage || !weight || parseFloat(weight) <= 0 || invoiceItems.length === 0) && styles.disabledButton
+                                addedPackages.length === 0 && styles.disabledButton
                             ]}
                             onPress={proceedToCustomerDetails}
-                            disabled={!selectedPackage || !weight || parseFloat(weight) <= 0 || invoiceItems.length === 0}
+                            disabled={addedPackages.length === 0}
                         >
                             <Text style={styles.generateButtonText}>Proceed to Customer Details</Text>
                         </TouchableOpacity>
@@ -312,6 +445,14 @@ const styles = StyleSheet.create({
         borderColor: '#4CAF50',
         padding: 20,
         borderRadius: 8,
+        marginBottom: 16,
+    },
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 16,
+        textAlign: 'center',
     },
     inputGroup: {
         marginBottom: 20,
@@ -422,12 +563,87 @@ const styles = StyleSheet.create({
     removeButton: {
         padding: 4,
     },
+    addPackageButton: {
+        backgroundColor: '#2196F3',
+        padding: 16,
+        alignItems: 'center',
+        borderRadius: 8,
+        marginTop: 10,
+    },
+    addPackageButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    addedPackagesContainer: {
+        backgroundColor: '#fff',
+        borderWidth: 2,
+        borderColor: '#FF9800',
+        padding: 20,
+        borderRadius: 8,
+        marginBottom: 16,
+    },
+    packageCard: {
+        backgroundColor: '#fff3cd',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#ffeaa7',
+    },
+    packageHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    packageName: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+        flex: 1,
+    },
+    removePackageButton: {
+        padding: 4,
+    },
+    packageDetails: {
+        fontSize: 14,
+        color: '#666',
+        marginBottom: 8,
+    },
+    packageItems: {
+        marginTop: 8,
+    },
+    itemsTitle: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: '#333',
+        marginBottom: 4,
+    },
+    packageItemText: {
+        fontSize: 13,
+        color: '#555',
+        marginLeft: 8,
+    },
+    grandTotalContainer: {
+        backgroundColor: '#e8f5e8',
+        padding: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 8,
+    },
+    grandTotalText: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: '#4CAF50',
+    },
     generateButton: {
         backgroundColor: '#4CAF50',
         padding: 16,
         alignItems: 'center',
         borderRadius: 8,
         marginTop: 10,
+        marginBottom:30
     },
     generateButtonText: {
         color: '#fff',
@@ -448,4 +664,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
     },
+    logo: {
+        width: 40,
+        height: 40,
+        marginRight: 12,
+    }
 });

@@ -24,6 +24,7 @@ export interface PackageItem {
     quantity: number;
 }
 
+// Single package info (backward compatibility)
 export interface PackageInfo {
     packageName: string;
     weight: number;
@@ -32,12 +33,29 @@ export interface PackageInfo {
     items: PackageItem[];
 }
 
+// Multiple packages support
+export interface PackageEntry {
+    packageId: string;
+    packageName: string;
+    rate: number;
+    weight: number;
+    total: number;
+    items: PackageItem[];
+}
+
+export interface MultiplePackageInfo {
+    packages: PackageEntry[];
+    grandTotal: number;
+}
+
+// Updated Invoice interface to support both single and multiple packages
 export interface Invoice {
     id: string;
     customerName: string;
     address?: string;
     date: string;
     items: {
+        id?: string;
         name: string;
         category: string;
         quantity: number;
@@ -46,7 +64,20 @@ export interface Invoice {
     total: number;
     phone: string;
     // Optional package information for package-based invoices
-    packageInfo?: PackageInfo;
+    // Can be either single package (backward compatibility) or multiple packages
+    packageInfo?: PackageInfo | MultiplePackageInfo;
+}
+
+// Type guard to check if packageInfo contains multiple packages
+export function isMultiplePackageInfo(packageInfo: PackageInfo | MultiplePackageInfo): packageInfo is MultiplePackageInfo {
+    return 'packages' in packageInfo && Array.isArray(packageInfo.packages);
+}
+
+// Firebase package item interface (from your payPerkg.tsx)
+export interface FirebasePackageItem {
+    id: string;
+    package_name: string;
+    rate: number;
 }
 
 // types/index.ts

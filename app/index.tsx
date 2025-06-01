@@ -9,7 +9,11 @@ export default function Index() {
     const {user, loading} = useAuth();
 
     useEffect(() => {
-        setupOfflineSync();
+        const initApp = async () => {
+            setupOfflineSync();
+        };
+
+        initApp();
     }, []);
 
     useEffect(() => {

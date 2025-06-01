@@ -527,7 +527,7 @@ export default function SettingsScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Settings</Text>
+                <Text style={styles.headerTitle}></Text>
                 <TouchableOpacity
                     style={styles.addButton}
                     onPress={toggleAddForm}

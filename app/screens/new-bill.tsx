@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, {useEffect, useState, useMemo} from 'react';
 import {
     View,
     TextInput,
@@ -12,17 +12,17 @@ import {
     Dimensions,
     Modal,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import type { Category } from '@/types';
-import { useItems } from "@/stores/useItems";
+import {MaterialIcons} from '@expo/vector-icons';
+import {router} from 'expo-router';
+import type {Category} from '@/types';
+import {useItems} from "@/stores/useItems";
 
 const windowWidth = Dimensions.get('window').width;
 
 export default function NewBillScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<Category>('Wash');
-    const { items, loading, error, fetchItems } = useItems();
+    const {items, loading, error, fetchItems} = useItems();
     const [cart, setCart] = useState<Record<string, { quantity: number; price: number }>>({});
     const [editingItem, setEditingItem] = useState<string | null>(null);
     const [editPrice, setEditPrice] = useState('');
@@ -70,7 +70,7 @@ export default function NewBillScreen() {
             const newQuantity = Math.max(0, currentItem.quantity + (increment ? 1 : -1));
 
             if (newQuantity === 0) {
-                const { [itemId]: _, ...rest } = prevCart;
+                const {[itemId]: _, ...rest} = prevCart;
                 return rest;
             }
 
@@ -124,7 +124,7 @@ export default function NewBillScreen() {
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4CAF50" />
+                <ActivityIndicator size="large" color="#4CAF50"/>
             </View>
         );
     }
@@ -132,7 +132,7 @@ export default function NewBillScreen() {
     if (error) {
         return (
             <View style={styles.errorContainer}>
-                <MaterialIcons name="error-outline" size={48} color="#FF6B6B" />
+                <MaterialIcons name="error-outline" size={48} color="#FF6B6B"/>
                 <Text style={styles.errorText}>Error loading items: {error}</Text>
             </View>
         );
@@ -140,16 +140,8 @@ export default function NewBillScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.header}>
-                <Image
-                    source={require('@/assets/dhobighar-logo.png')}
-                    style={styles.logo}
-                />
-                <Text style={styles.headerTitle}>New Invoice</Text>
-            </View>
-
             <View style={styles.searchBarContainer}>
-                <MaterialIcons name="search" size={24} color="#666" style={styles.searchIcon} />
+                <MaterialIcons name="search" size={24} color="#666" style={styles.searchIcon}/>
                 <TextInput
                     style={styles.searchBar}
                     placeholder="Search items..."
@@ -192,7 +184,7 @@ export default function NewBillScreen() {
                 data={filteredItems}
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.listContainer}
-                renderItem={({ item }) => (
+                renderItem={({item}) => (
                     <View style={styles.itemContainer}>
                         <View style={styles.itemInfo}>
                             <Text style={styles.itemName}>{item.name}</Text>
@@ -203,7 +195,7 @@ export default function NewBillScreen() {
                                 <Text style={styles.itemPrice}>
                                     ₹{cart[item.id]?.price || item.price}
                                 </Text>
-                                <MaterialIcons name="edit" size={16} color="#4CAF50" style={styles.editIcon} />
+                                <MaterialIcons name="edit" size={16} color="#4CAF50" style={styles.editIcon}/>
                             </TouchableOpacity>
                         </View>
                         <View style={styles.quantityContainer}>
@@ -215,14 +207,15 @@ export default function NewBillScreen() {
                                 onPress={() => updateQuantity(item.id, false)}
                                 disabled={!cart[item.id]?.quantity}
                             >
-                                <MaterialIcons name="remove" size={24} color={cart[item.id]?.quantity ? "#FF6B6B" : "#ccc"} />
+                                <MaterialIcons name="remove" size={24}
+                                               color={cart[item.id]?.quantity ? "#FF6B6B" : "#ccc"}/>
                             </TouchableOpacity>
                             <Text style={styles.quantityText}>{cart[item.id]?.quantity || 0}</Text>
                             <TouchableOpacity
                                 style={styles.quantityButton}
                                 onPress={() => updateQuantity(item.id, true)}
                             >
-                                <MaterialIcons name="add" size={24} color="#4CAF50" />
+                                <MaterialIcons name="add" size={24} color="#4CAF50"/>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -276,7 +269,7 @@ export default function NewBillScreen() {
                         </View>
                         <View style={styles.nextButtonRight}>
                             <Text style={styles.nextButtonText}>Next</Text>
-                            <MaterialIcons name="arrow-forward" size={24} color="#fff" />
+                            <MaterialIcons name="arrow-forward" size={24} color="#fff"/>
                         </View>
                     </View>
                 </TouchableOpacity>
@@ -385,7 +378,7 @@ const styles = StyleSheet.create({
         borderColor: '#eee',
         elevation: 2,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: {width: 0, height: 2},
         shadowOpacity: 0.1,
         shadowRadius: 4,
     },
